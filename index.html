@@ -1,1 +1,206 @@
-Hello World tnosal
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wydarzenia klasy 2D</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background: #f0f8ff;
+        margin: 0;
+        padding: 0;
+      }
+      h1 {
+        background: #0073e6;
+        color: white;
+        padding: 15px;
+        margin: 0;
+      }
+      .calendar {
+        width: 90%;
+        max-width: 800px;
+        margin: 20px auto;
+        background: white;
+        padding: 20px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .header button {
+        background: #0073e6;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        cursor: pointer;
+        font-size: 16px;
+        border-radius: 5px;
+      }
+      .header button:hover {
+        background: #005bb5;
+      }
+      .days,
+      .dates {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 5px;
+      }
+      .day,
+      .date {
+        padding: 10px;
+        border: 1px solid #ddd;
+        text-align: center;
+        min-height: 80px;
+        font-size: 14px;
+        border-radius: 5px;
+      }
+      .day {
+        font-weight: bold;
+        background: #0073e6;
+        color: white;
+      }
+      .date {
+        background: #f9f9f9;
+        position: relative;
+      }
+      .weekend {
+        background: #ffdddd;
+      }
+      .event {
+        background-color: #ffcc00;
+        margin-top: 3px;
+        padding: 5px;
+        font-size: 12px;
+        cursor: pointer;
+        border-radius: 3px;
+        font-weight: bold;
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tooltip {
+        display: none;
+        position: absolute;
+        left: 50%;
+        bottom: 110%;
+        transform: translateX(-50%);
+        background: #333;
+        color: #fff;
+        padding: 5px;
+        font-size: 12px;
+        border-radius: 5px;
+        white-space: nowrap;
+      }
+      .event:hover + .tooltip {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Wydarzenia klasy 2D 📅</h1>
+
+    <div class="calendar">
+      <div class="header">
+        <button onclick="changeMonth(-1)"><<</button>
+        <h2 id="monthYear"></h2>
+        <button onclick="changeMonth(1)">>></button>
+      </div>
+      <div class="days">
+        <div class="day">Pon</div>
+        <div class="day">Wt</div>
+        <div class="day">Śr</div>
+        <div class="day">Czw</div>
+        <div class="day">Pt</div>
+        <div class="day weekend">Sob</div>
+        <div class="day weekend">Ndz</div>
+      </div>
+      <div class="dates" id="dates"></div>
+    </div>
+
+    <script>
+      let events = [];
+      let currentDate = new Date();
+
+      async function loadEvents() {
+        try {
+          const response = await fetch("events.json");
+          events = await response.json();
+          renderCalendar();
+        } catch (error) {
+          console.error("Błąd ładowania pliku JSON:", error);
+        }
+      }
+
+      function renderCalendar() {
+        const monthYear = document.getElementById("monthYear");
+        const datesDiv = document.getElementById("dates");
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+
+        monthYear.innerText = new Intl.DateTimeFormat("pl", {
+          month: "long",
+          year: "numeric",
+        }).format(currentDate);
+
+        datesDiv.innerHTML = "";
+
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const startDay = firstDay === 0 ? 6 : firstDay - 1;
+
+        for (let i = 0; i < startDay; i++) {
+          const emptyCell = document.createElement("div");
+          emptyCell.classList.add("date");
+          datesDiv.appendChild(emptyCell);
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dateCell = document.createElement("div");
+          dateCell.classList.add("date");
+          dateCell.innerText = day;
+
+          if ((startDay + day - 1) % 7 >= 5) {
+            dateCell.classList.add("weekend");
+          }
+
+          const eventDate = `${year}-${String(month + 1).padStart(
+            2,
+            "0"
+          )}-${String(day).padStart(2, "0")}`;
+          const dayEvents = events.filter((e) => e.date === eventDate);
+
+          if (dayEvents.length > 0) {
+            dayEvents.forEach((event) => {
+              const eventDiv = document.createElement("div");
+              eventDiv.classList.add("event");
+              eventDiv.innerText = event.title;
+
+              const tooltip = document.createElement("div");
+              tooltip.classList.add("tooltip");
+              tooltip.innerText = event.details;
+
+              dateCell.appendChild(eventDiv);
+              dateCell.appendChild(tooltip);
+            });
+          }
+
+          datesDiv.appendChild(dateCell);
+        }
+      }
+
+      function changeMonth(step) {
+        currentDate.setMonth(currentDate.getMonth() + step);
+        renderCalendar();
+      }
+
+      loadEvents();
+    </script>
+  </body>
+</html>
