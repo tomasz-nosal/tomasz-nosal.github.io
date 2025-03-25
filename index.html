@@ -13,7 +13,7 @@
         padding: 0;
       }
       h1 {
-        background: #0073e6;
+        background: #2c2a5d;
         color: white;
         padding: 15px;
         margin: 0;
@@ -33,7 +33,7 @@
         margin-bottom: 10px;
       }
       .header button {
-        background: #0073e6;
+        background: #4c49a3;
         color: white;
         border: none;
         padding: 10px 15px;
@@ -42,7 +42,7 @@
         border-radius: 5px;
       }
       .header button:hover {
-        background: #005bb5;
+        background: #272572;
       }
       .days,
       .dates {
@@ -61,7 +61,7 @@
       }
       .day {
         font-weight: bold;
-        background: #0073e6;
+        background: #1d1842;
         color: white;
       }
       .date {
@@ -69,7 +69,7 @@
         position: relative;
       }
       .weekend {
-        background: #ffdddd;
+        background: #fda1a2;
       }
       .event {
         margin-top: 3px;
@@ -87,7 +87,7 @@
         background-color: #ffcc00;
       }
       .event-important {
-        background-color: #ff0000;
+        background-color: #ef3b33;
         color: white;
       }
       .tooltip {
@@ -107,7 +107,7 @@
         display: block;
       }
       .today {
-        background: #ffeb3b; /* Żółte tło */
+        background: #ffc72c;
         animation: pulse 1.5s infinite alternate;
         border: 2px solid #ff9800;
         font-weight: bold;
@@ -118,6 +118,51 @@
         }
         to {
           box-shadow: 0 0 20px #ff5722;
+        }
+      }
+      @media (max-width: 600px) {
+        .calendar {
+          width: 100%;
+          padding: 10px;
+        }
+
+        .days,
+        .dates {
+          display: none; /* Ukrywa klasyczny widok kalendarza */
+        }
+
+        .event-list {
+          display: block;
+          text-align: left;
+          background: white;
+          padding: 10px;
+          border-radius: 5px;
+          box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .event-item {
+          padding: 10px;
+          border-bottom: 1px solid #ddd;
+          font-size: 16px;
+          position: relative;
+        }
+
+        .event-item:last-child {
+          border-bottom: none;
+        }
+
+        .event-date {
+          font-weight: bold;
+          color: #2c2a5d;
+        }
+
+        .event-title {
+          margin-left: 10px;
+        }
+
+        .event-details {
+          margin-top: 10px;
+          padding: 10px;
         }
       }
     </style>
@@ -142,6 +187,7 @@
       </div>
       <div class="dates" id="dates"></div>
     </div>
+    <div id="eventList" class="event-list"></div>
 
     <script>
       let events = [];
@@ -162,6 +208,7 @@
       function renderCalendar() {
         const monthYear = document.getElementById("monthYear");
         const datesDiv = document.getElementById("dates");
+        const eventListDiv = document.getElementById("eventList");
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
 
@@ -171,58 +218,83 @@
         }).format(currentDate);
 
         datesDiv.innerHTML = "";
+        eventListDiv.innerHTML = "";
 
         const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const startDay = firstDay === 0 ? 6 : firstDay - 1;
+        if (window.innerWidth <= 600) {
+          // Jeśli ekran jest mały, pokazujemy listę wydarzeń
+          const monthEvents = events.filter((e) =>
+            e.date.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`)
+          );
 
-        for (let i = 0; i < startDay; i++) {
-          const emptyCell = document.createElement("div");
-          emptyCell.classList.add("date");
-          datesDiv.appendChild(emptyCell);
-        }
-
-        const today = new Date();
-        const todayStr = `${today.getFullYear()}-${String(
-          today.getMonth() + 1
-        ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-        for (let day = 1; day <= daysInMonth; day++) {
-          const dateCell = document.createElement("div");
-          dateCell.classList.add("date");
-          dateCell.innerText = day;
-
-          if ((startDay + day - 1) % 7 >= 5) {
-            dateCell.classList.add("weekend");
-          }
-
-          const eventDate = `${year}-${String(month + 1).padStart(
-            2,
-            "0"
-          )}-${String(day).padStart(2, "0")}`;
-          const dayEvents = events.filter((e) => e.date === eventDate);
-
-          if (eventDate === todayStr) {
-            dateCell.classList.add("today");
-          }
-
-          if (dayEvents.length > 0) {
-            dayEvents.forEach((event) => {
+          if (monthEvents.length === 0) {
+            eventListDiv.innerHTML = "<p>Brak wydarzeń w tym miesiącu.</p>";
+          } else {
+            monthEvents.forEach((event) => {
               const eventDiv = document.createElement("div");
-              eventDiv.classList.add("event");
-              eventDiv.classList.add("event-" + event.type);
-              eventDiv.innerText = event.title;
+              eventDiv.classList.add("event-item");
+              eventDiv.innerHTML = `<span class="event-date">${event.date}</span>: <span class="event-title">${event.title}</span>`;
 
-              const tooltip = document.createElement("div");
-              tooltip.classList.add("tooltip");
-              tooltip.innerText = event.details;
+              const eventDivDetails = document.createElement("div");
+              eventDivDetails.innerText = event.details;
+              eventDivDetails.classList.add("event-details");
+              eventDivDetails.classList.add(`event-${event.type}`);
+              eventDiv.appendChild(eventDivDetails);
 
-              dateCell.appendChild(eventDiv);
-              dateCell.appendChild(tooltip);
+              eventListDiv.appendChild(eventDiv);
             });
           }
+        } else {
+          for (let i = 0; i < startDay; i++) {
+            const emptyCell = document.createElement("div");
+            emptyCell.classList.add("date");
+            datesDiv.appendChild(emptyCell);
+          }
 
-          datesDiv.appendChild(dateCell);
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(
+            today.getMonth() + 1
+          ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+          for (let day = 1; day <= daysInMonth; day++) {
+            const dateCell = document.createElement("div");
+            dateCell.classList.add("date");
+            dateCell.innerText = day;
+
+            if ((startDay + day - 1) % 7 >= 5) {
+              dateCell.classList.add("weekend");
+            }
+
+            const eventDate = `${year}-${String(month + 1).padStart(
+              2,
+              "0"
+            )}-${String(day).padStart(2, "0")}`;
+            const dayEvents = events.filter((e) => e.date === eventDate);
+
+            if (eventDate === todayStr) {
+              dateCell.classList.add("today");
+            }
+
+            if (dayEvents.length > 0) {
+              dayEvents.forEach((event) => {
+                const eventDiv = document.createElement("div");
+                eventDiv.classList.add("event");
+                eventDiv.classList.add("event-" + event.type);
+                eventDiv.innerText = event.title;
+
+                const tooltip = document.createElement("div");
+                tooltip.classList.add("tooltip");
+                tooltip.innerText = event.details;
+
+                dateCell.appendChild(eventDiv);
+                dateCell.appendChild(tooltip);
+              });
+            }
+
+            datesDiv.appendChild(dateCell);
+          }
         }
       }
 
