@@ -73,7 +73,6 @@
         background: #ffdddd;
       }
       .event {
-        background-color: #ffcc00;
         margin-top: 3px;
         padding: 5px;
         font-size: 12px;
@@ -84,6 +83,12 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+      .event-info {
+        background-color: #ffcc00;
+      }
+      .event-important {
+        background-color: #ff0000;
       }
       .tooltip {
         display: none;
@@ -130,7 +135,9 @@
 
       async function loadEvents() {
         try {
-          const response = await fetch("events.json");
+          const response = await fetch(
+            "https://tomasz-nosal.github.io/events.json"
+          );
           events = await response.json();
           renderCalendar();
         } catch (error) {
@@ -180,6 +187,7 @@
             dayEvents.forEach((event) => {
               const eventDiv = document.createElement("div");
               eventDiv.classList.add("event");
+              eventDiv.classList.add("event-" + event.type);
               eventDiv.innerText = event.title;
 
               const tooltip = document.createElement("div");
