@@ -197,6 +197,7 @@
             "https://tomasz-nosal.github.io/events.json"
           );
           events = await response.json();
+          events.sort((a, b) => new Date(a.date) - new Date(b.date));
           renderCalendar();
         } catch (error) {
           console.error("Błąd ładowania pliku JSON:", error);
