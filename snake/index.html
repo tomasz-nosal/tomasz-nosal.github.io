@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Wąż z zadaniami mnożenia</title>
+  <style>
+    :root{--bg:#0f172a;--panel:#0b1220;--accent:#06b6d4;--muted:#9ca3af;--good:#10b981;--bad:#ef4444}
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;color:#e6eef6;background:var(--bg);display:flex;align-items:center;justify-content:center}
+    .wrap{width:960px;max-width:100%;display:grid;grid-template-columns:640px 1fr;gap:18px;padding:20px}
+    canvas{background:#071029;border-radius:8px;display:block;width:100%;height:auto}
+    .panel{background:var(--panel);padding:14px;border-radius:8px;color:#e6eef6}
+    h1{margin:0 0 12px;font-size:18px}
+    .row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .stat{background:rgba(255,255,255,0.03);padding:8px;border-radius:6px;min-width:120px;text-align:center}
+    .controls{font-size:13px;color:var(--muted)}
+    button{background:var(--accent);border:none;padding:8px 10px;border-radius:6px;color:#012;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+    .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.6)}
+    .dialog{background:#021022;padding:20px;border-radius:10px;min-width:320px;color:#e6eef6}
+    .question{font-size:18px;margin-bottom:12px}
+    input[type=number]{width:100%;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    .hint{font-size:13px;color:var(--muted);margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <canvas id="game" width="640" height="640"></canvas>
+    </div>
+
+    <div class="panel">
+      <h1>Wąż — tryb: Mnożenie do 100</h1>
+      <div class="row">
+        <div class="stat">
+          <div style="font-size:12px;color:var(--muted)">Długość węża</div>
+          <div id="length" style="font-size:20px">0</div>
+        </div>
+        <div class="stat">
+          <div style="font-size:12px;color:var(--muted)">Aktualny wynik</div>
+          <div id="score" style="font-size:20px">0</div>
+        </div>
+        <div class="stat">
+          <div style="font-size:12px;color:var(--muted)">Rekord (najdłuższy)</div>
+          <div id="best" style="font-size:20px">0</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        Sterowanie: strzałki / WASD. Po zjedzeniu jabłka pojawi się zadanie mnożenia (1–10 × 1–10). Jeśli odpowiesz poprawnie, jabłko zostaje zjedzone i wąż rośnie. Jeśli źle — koniec gry.
+      </div>
+
+      <div style="margin-top:14px">
+        <button id="restart">Nowa gra</button>
+        <button id="pause" class="secondary">Pauza</button>
+      </div>
+
+      <hr style="margin:14px 0;border:none;border-top:1px solid rgba(255,255,255,0.04)" />
+
+      <div style="font-size:13px;color:var(--muted)">
+        Sugerowane wykorzystanie: idealna gra dla dzieci uczących się mnożenia. Rekord zapisywany jest lokalnie w przeglądarce (localStorage) — dzieci mogą porównywać wyniki na swoich komputerach.
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay for math question -->
+  <div id="modal" class="overlay" style="display:none">
+    <div class="dialog">
+      <div class="question" id="qtext">Ile to będzie?</div>
+      <input id="answer" type="number" inputmode="numeric" autocomplete="off" />
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+        <button id="submit">Sprawdź</button>
+        <button id="giveup" class="secondary">Poddaj się</button>
+      </div>
+      <div class="hint">Jeśli odpowiesz źle, gra się zakończy. Możesz też się poddać.</div>
+    </div>
+  </div>
+
+  <!-- Game over overlay -->
+  <div id="gameover" class="overlay" style="display:none">
+    <div class="dialog">
+      <div style="font-size:18px;margin-bottom:10px">Koniec gry</div>
+      <div id="finalText" style="margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="goRestart">Zagraj ponownie</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Settings ---
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const size = 32; // number of cells per row/column
+    const cell = canvas.width / size; // pixels per cell
+    const speed = 8; // moves per second
+
+    // Game state
+    let snake = [{x: Math.floor(size/2), y: Math.floor(size/2)}];
+    let dir = {x:1,y:0};
+    let apple = null;
+    let pendingGrowth = 0;
+    let lastTick = 0;
+    let running = false;
+    let paused = false;
+    let score = 0;
+
+    const lengthEl = document.getElementById('length');
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+
+    // Load best from localStorage
+    const BEST_KEY = 'snake-math-best-length-v1';
+    let best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10);
+    bestEl.textContent = best;
+
+    // Modal elements
+    const modal = document.getElementById('modal');
+    const qtext = document.getElementById('qtext');
+    const answer = document.getElementById('answer');
+    const submit = document.getElementById('submit');
+    const giveup = document.getElementById('giveup');
+
+    const gameover = document.getElementById('gameover');
+    const finalText = document.getElementById('finalText');
+    const goRestart = document.getElementById('goRestart');
+
+    // Helpers
+    function randInt(min, max){ return Math.floor(Math.random()*(max-min+1))+min }
+    function placeApple(){
+      // find empty cell
+      let tries=0;
+      while(true){
+        const p = {x: randInt(0,size-1), y: randInt(0,size-1)};
+        if(!snake.some(s => s.x===p.x && s.y===p.y)){
+          apple = p; return;
+        }
+        if(++tries>1000) break;
+      }
+    }
+
+    function draw(){
+      // background
+      ctx.fillStyle = '#021421';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      // grid (subtle)
+      ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+      ctx.lineWidth = 1;
+      for(let i=0;i<=size;i++){
+        ctx.beginPath(); ctx.moveTo(i*cell,0); ctx.lineTo(i*cell,canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i*cell); ctx.lineTo(canvas.width,i*cell); ctx.stroke();
+      }
+
+      // apple
+      if(apple){
+        ctx.fillStyle = '#ef4444';
+        roundRect(ctx, apple.x*cell+2, apple.y*cell+2, cell-4, cell-4, 6);
+      }
+
+      // snake
+      for(let i=snake.length-1;i>=0;i--){
+        const s = snake[i];
+        const t = i===snake.length-1 ? 1 : 0.6; // head brighter
+        ctx.fillStyle = `rgba(16,185,129,${t})`;
+        roundRect(ctx, s.x*cell+2, s.y*cell+2, cell-4, cell-4, 6);
+      }
+    }
+
+    function roundRect(ctx,x,y,w,h,r){
+      ctx.beginPath(); ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r);
+      ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r);
+      ctx.arcTo(x,y,x+w,y,r);
+      ctx.closePath(); ctx.fill();
+    }
+
+    function step(){
+      // move
+      const head = {...snake[snake.length-1]};
+      head.x += dir.x; head.y += dir.y;
+
+      // wrap-around (or: stop on wall?) We will wrap so it's more kid-friendly
+      if(head.x < 0) head.x = size-1;
+      if(head.x >= size) head.x = 0;
+      if(head.y < 0) head.y = size-1;
+      if(head.y >= size) head.y = 0;
+
+      // collision with self -> game over
+      if(snake.some(s => s.x===head.x && s.y===head.y)){
+        endGame(false);
+        return;
+      }
+
+      snake.push(head);
+      if(pendingGrowth>0){ pendingGrowth--; } else { snake.shift(); }
+
+      // apple
+      if(apple && head.x===apple.x && head.y===apple.y){
+        // pause game and show multiplication question
+        pauseForQuestion();
+      }
+
+      // update UI
+      lengthEl.textContent = snake.length;
+      scoreEl.textContent = score;
+    }
+
+    // Game loop
+    function loop(ts){
+      if(!running || paused) { lastTick = ts; requestAnimationFrame(loop); return; }
+      const msPerMove = 1000 / speed;
+      if(ts - lastTick > msPerMove){
+        lastTick = ts;
+        step();
+      }
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    // Controls
+    window.addEventListener('keydown', e=>{
+      if(modal.style.display==='block') return; // while answering
+      const key = e.key.toLowerCase();
+      if(['arrowup','w'].includes(e.key.toLowerCase()) && !(dir.y===1)) { dir={x:0,y:-1}; }
+      if(['arrowdown','s'].includes(e.key.toLowerCase()) && !(dir.y===-1)) { dir={x:0,y:1}; }
+      if(['arrowleft','a'].includes(e.key.toLowerCase()) && !(dir.x===1)) { dir={x:-1,y:0}; }
+      if(['arrowright','d'].includes(e.key.toLowerCase()) && !(dir.x===-1)) { dir={x:1,y:0}; }
+    });
+
+    // Start / restart
+    document.getElementById('restart').addEventListener('click', startGame);
+    document.getElementById('pause').addEventListener('click', ()=>{
+      paused = !paused; document.getElementById('pause').textContent = paused ? 'Wznów' : 'Pauza';
+    });
+
+    goRestart.addEventListener('click', ()=>{ gameover.style.display='none'; startGame(); });
+
+    function startGame(){
+      snake = [{x: Math.floor(size/2), y: Math.floor(size/2)}];
+      dir = {x:1,y:0};
+      pendingGrowth = 0;
+      score = 0;
+      lastTick = 0;
+      running = true;
+      paused = false;
+      document.getElementById('pause').textContent = 'Pauza';
+      placeApple();
+      lengthEl.textContent = snake.length;
+      scoreEl.textContent = score;
+      draw();
+    }
+
+    // Math question logic
+    let correctAnswer = null;
+    function pauseForQuestion(){
+      // generate multiplicands 1..10 (product up to 100)
+      const a = randInt(1,10);
+      const b = randInt(1,10);
+      correctAnswer = a*b;
+      qtext.textContent = `Ile to: ${a} × ${b} ?`;
+      answer.value = '';
+      modal.style.display = 'flex';
+      answer.focus();
+      // temporarily pause game updates
+      paused = true;
+    }
+
+    submit.addEventListener('click', ()=>{ checkAnswer(); });
+    answer.addEventListener('keypress', e=>{ if(e.key==='Enter') checkAnswer(); });
+    giveup.addEventListener('click', ()=>{ modal.style.display='none'; endGame(false); });
+
+    function checkAnswer(){
+      const v = parseInt(answer.value,10);
+      if(Number.isNaN(v)) return;
+      modal.style.display = 'none';
+      if(v === correctAnswer){
+        // success: consume apple, increase length and score, place new apple
+        pendingGrowth += 3; // grow by 3 cells to make it rewarding
+        score += 1;
+        placeApple();
+        paused = false;
+        // update length and score UI after growth will show next frames
+      } else {
+        endGame(false);
+      }
+    }
+
+    function endGame(win){
+      running = false;
+      paused = false;
+      gameover.style.display = 'flex';
+      const len = snake.length;
+      finalText.innerHTML = `Długość węża: <strong>${len}</strong><br/>Punkty: <strong>${score}</strong>`;
+      if(len > best){
+        best = len; localStorage.setItem(BEST_KEY, String(best)); bestEl.textContent = best;
+      }
+    }
+
+    // Initialize
+    placeApple(); draw();
+    requestAnimationFrame(loop);
+    startGame();
+  </script>
+</body>
+</html>
