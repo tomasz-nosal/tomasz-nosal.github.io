@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tetris z pytaniami mnożenia</title>
+  <style>
+    :root{--bg:#0f172a;--panel:#071226;--accent:#06b6d4;--muted:#9ca3af;--good:#10b981;--bad:#ef4444}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#031026 0%,#071a2b 100%);color:#e6eef6;font-family:Inter,system-ui,Arial}
+    .wrap{width:980px;max-width:95%;display:grid;grid-template-columns:420px 1fr;gap:20px;padding:24px}
+    .panel{background:var(--panel);padding:14px;border-radius:10px}
+    canvas{background:#00121b;border-radius:8px;display:block;margin:auto}
+    h1{margin:0 0 8px;font-size:18px}
+    .stat{display:flex;gap:10px;align-items:center}
+    .stat div{background:rgba(255,255,255,0.03);padding:8px;border-radius:6px;min-width:110px;text-align:center}
+    .controls{font-size:13px;color:var(--muted);margin-top:8px}
+    button{background:var(--accent);border:none;padding:8px 10px;border-radius:6px;color:#012;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+    .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.6)}
+    .dialog{background:#021022;padding:18px;border-radius:10px;color:#e6eef6;min-width:320px}
+    input[type=number]{width:100%;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    .hint{font-size:13px;color:var(--muted);margin-top:8px}
+    .kbd{background:rgba(255,255,255,0.04);padding:6px 8px;border-radius:6px;font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h1>Tetris — tryb: Mnożenie do 100</h1>
+      <canvas id="board" width="300" height="600"></canvas>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;justify-content:center">
+        <button id="start">Nowa gra</button>
+        <button id="pause" class="secondary">Pauza</button>
+      </div>
+      <div class="controls" style="margin-top:12px">
+        Sterowanie: ⬅️➡️ - przesuwanie, ⬆️ - obrót, ⬇️ - przyspieszenie, spacja - upuszczenie. Po oczyszczeniu linii (lub kilku) pojawi się pytanie mnożenia (1–10 × 1–10). Jeśli odpowiesz poprawnie — otrzymujesz bonus punktowy i gra toczy się dalej. Jeśli odpowiesz źle — koniec gry.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div style="font-size:12px;color:var(--muted)">Poziom</div>
+          <div id="level" style="font-size:22px">1</div>
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted)">Linie</div>
+          <div id="lines" style="font-size:22px">0</div>
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted)">Punkty</div>
+          <div id="score" style="font-size:22px">0</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Następny klocek:</div>
+        <canvas id="next" width="140" height="140" style="background:transparent"></canvas>
+      </div>
+
+      <hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,0.04)" />
+
+      <div style="font-size:13px;color:var(--muted)">Rekord długości gry (punkty) jest zapisywany lokalnie w przeglądarce.</div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+        <div class="kbd">Klawiatura</div>
+        <div style="flex:1"></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+        <div style="background:rgba(255,255,255,0.03);padding:8px;border-radius:6px;text-align:center;min-width:160px">
+          <div style="font-size:12px;color:var(--muted)">Najlepszy wynik</div>
+          <div id="best" style="font-size:20px">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for multiplication question -->
+  <div id="modal" class="overlay" style="display:none">
+    <div class="dialog">
+      <div id="qtext" style="font-size:18px;margin-bottom:10px">Ile to?</div>
+      <input id="answer" type="number" inputmode="numeric" autocomplete="off" />
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+        <button id="submit">Sprawdź</button>
+        <button id="giveup" class="secondary">Poddaj się</button>
+      </div>
+      <div class="hint">Źle → koniec gry. Dobrze → bonus punktowy za oczyszczone linie.</div>
+    </div>
+  </div>
+
+  <!-- Game over modal -->
+  <div id="gameover" class="overlay" style="display:none">
+    <div class="dialog">
+      <div style="font-size:18px;margin-bottom:8px">Koniec gry</div>
+      <div id="finalText" style="margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="goRestart">Zagraj ponownie</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Tetris with quiz implementation ---
+    const COLS = 10, ROWS = 20, BLOCK = 30;
+    const boardCanvas = document.getElementById('board');
+    const ctx = boardCanvas.getContext('2d');
+    boardCanvas.width = COLS * BLOCK;
+    boardCanvas.height = ROWS * BLOCK;
+
+    const nextCanvas = document.getElementById('next');
+    const nctx = nextCanvas.getContext('2d');
+
+    const scoreEl = document.getElementById('score');
+    const linesEl = document.getElementById('lines');
+    const levelEl = document.getElementById('level');
+    const bestEl = document.getElementById('best');
+
+    const modal = document.getElementById('modal');
+    const qtext = document.getElementById('qtext');
+    const answer = document.getElementById('answer');
+    const submit = document.getElementById('submit');
+    const giveup = document.getElementById('giveup');
+
+    const gameover = document.getElementById('gameover');
+    const finalText = document.getElementById('finalText');
+    const goRestart = document.getElementById('goRestart');
+
+    const START_KEY = 'tetris-math-best-score-v1';
+    let best = parseInt(localStorage.getItem(START_KEY) || '0', 10);
+    bestEl.textContent = best;
+
+    const SHAPES = {
+      I: [[1,1,1,1]],
+      J: [[1,0,0],[1,1,1]],
+      L: [[0,0,1],[1,1,1]],
+      O: [[1,1],[1,1]],
+      S: [[0,1,1],[1,1,0]],
+      T: [[0,1,0],[1,1,1]],
+      Z: [[1,1,0],[0,1,1]]
+    };
+    const COLORS = {I:'#06b6d4',J:'#6366f1',L:'#f97316',O:'#f59e0b',S:'#10b981',T:'#ec4899',Z:'#ef4444'};
+    const PIECES = Object.keys(SHAPES);
+
+    function createEmptyBoard(){
+      const b = [];
+      for(let y=0;y<ROWS;y++){ b.push(new Array(COLS).fill(0)); }
+      return b;
+    }
+
+    let board = createEmptyBoard();
+    let current = null;
+    let next = null;
+    let dropCounter = 0;
+    let dropInterval = 1000; // ms, will decrease with level
+    let lastTime = 0;
+    let score = 0;
+    let lines = 0;
+    let level = 1;
+    let running = false;
+    let waitingForAnswer = false;
+    let pendingLinesToClear = 0; // lines cleared that await to be confirmed by correct answer
+
+    function randPiece(){
+      const k = PIECES[Math.floor(Math.random()*PIECES.length)];
+      return {shape:SHAPES[k], type:k, x:Math.floor(COLS/2)-Math.ceil(SHAPES[k][0].length/2), y:0};
+    }
+
+    function rotate(matrix){
+      const m = matrix.map(r=>r.slice());
+      const H = m.length, W = m[0].length;
+      const res = Array.from({length:W}, _=>Array(H).fill(0));
+      for(let y=0;y<H;y++) for(let x=0;x<W;x++) res[x][H-1-y]=m[y][x];
+      return res;
+    }
+
+    function collide(board, piece){
+      const m = piece.shape;
+      for(let y=0;y<m.length;y++) for(let x=0;x<m[y].length;x++){
+        if(m[y][x]){
+          const nx = piece.x + x; const ny = piece.y + y;
+          if(nx<0 || nx>=COLS || ny>=ROWS) return true;
+          if(ny>=0 && board[ny][nx]) return true;
+        }
+      }
+      return false;
+    }
+
+    function merge(board, piece){
+      const m = piece.shape;
+      for(let y=0;y<m.length;y++) for(let x=0;x<m[y].length;x++){
+        if(m[y][x]){
+          const nx = piece.x + x; const ny = piece.y + y;
+          if(ny>=0 && ny<ROWS && nx>=0 && nx<COLS) board[ny][nx] = piece.type;
+        }
+      }
+    }
+
+    function clearLines(){
+      let removed = 0;
+      for(let y=ROWS-1;y>=0;y--){
+        if(board[y].every(v=>v)){ board.splice(y,1); board.unshift(new Array(COLS).fill(0)); removed++; y++; }
+      }
+      return removed;
+    }
+
+    function updateScore(cleared){
+      if(cleared<=0) return;
+      // standard scoring
+      const pointsFor = {1:40,2:100,3:300,4:1200};
+      score += (pointsFor[cleared] || (cleared*300)) * level;
+      lines += cleared;
+      level = Math.floor(lines/10)+1;
+      dropInterval = Math.max(100, 1000 - (level-1)*75);
+      scoreEl.textContent = score;
+      linesEl.textContent = lines;
+      levelEl.textContent = level;
+    }
+
+    function spawn(){
+      current = next || randPiece();
+      next = randPiece();
+      // if immediate collision -> game over
+      if(collide(board, current)) { endGame(); }
+    }
+
+    function hardDrop(){
+      while(!collide(board, {...current, y: current.y+1})) current.y++;
+      lockPiece();
+    }
+
+    function lockPiece(){
+      merge(board, current);
+      const cleared = clearLines();
+      if(cleared>0){
+        // pause and ask question before confirming cleared lines
+        waitingForAnswer = true;
+        pendingLinesToClear = cleared;
+        pauseForQuestion(cleared);
+      }
+      spawn();
+    }
+
+    function pauseForQuestion(cleared){
+      // generate question 1..10 x 1..10
+      const a = Math.floor(Math.random()*10)+1;
+      const b = Math.floor(Math.random()*10)+1;
+      modal.style.display = 'flex';
+      qtext.textContent = `Poziom: ${level} — Oczyszczono ${cleared} lini(e). Ile to: ${a} × ${b} ?`;
+      answer.value = '';
+      answer.focus();
+      modal._correct = a*b;
+      // pause loop
+      running = false;
+    }
+
+    submit.addEventListener('click', ()=>{ checkAnswer(); });
+    answer.addEventListener('keypress', e=>{ if(e.key==='Enter') checkAnswer(); });
+    giveup.addEventListener('click', ()=>{ modal.style.display='none'; endGame(); });
+
+    function checkAnswer(){
+      const v = parseInt(answer.value,10);
+      modal.style.display='none';
+      if(v === modal._correct){
+        // correct: give bonus points based on pendingLinesToClear
+        const bonus = pendingLinesToClear * 100 * level;
+        score += bonus;
+        updateScore(pendingLinesToClear); // will update lines/level
+        pendingLinesToClear = 0;
+        running = true;
+      } else {
+        endGame();
+      }
+    }
+
+    function endGame(){
+      running = false;
+      gameover.style.display = 'flex';
+      finalText.innerHTML = `Punkty: <strong>${score}</strong><br/>Oczyszczone linie: <strong>${lines}</strong>`;
+      if(score > best){ best = score; localStorage.setItem(START_KEY, String(best)); bestEl.textContent = best; }
+    }
+
+    function drawCell(x,y,type){
+      const px = x*BLOCK, py = y*BLOCK;
+      if(!type){
+        ctx.fillStyle = '#00151b'; ctx.fillRect(px+1,py+1,BLOCK-2,BLOCK-2); return;
+      }
+      ctx.fillStyle = COLORS[type] || '#777';
+      ctx.fillRect(px+1,py+1,BLOCK-2,BLOCK-2);
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.strokeRect(px+1,py+1,BLOCK-2,BLOCK-2);
+    }
+
+    function draw(){
+      // board background
+      ctx.fillStyle = '#00121b'; ctx.fillRect(0,0,boardCanvas.width,boardCanvas.height);
+      // grid
+      for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) drawCell(x,y,board[y][x]);
+      // current piece
+      if(current){
+        for(let y=0;y<current.shape.length;y++) for(let x=0;x<current.shape[y].length;x++){
+          if(current.shape[y][x]){
+            const px = current.x + x, py = current.y + y;
+            if(py>=0) drawCell(px,py,current.type);
+          }
+        }
+      }
+
+      // next piece
+      nctx.clearRect(0,0,nextCanvas.width,nextCanvas.height);
+      if(next){
+        const s = next.shape; const w = s[0].length; const h = s.length; const unit = 24; const offsetX = (nextCanvas.width - w*unit)/2; const offsetY = (nextCanvas.height - h*unit)/2;
+        for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(s[y][x]){
+          nctx.fillStyle = COLORS[next.type] || '#777'; nctx.fillRect(offsetX + x*unit, offsetY + y*unit, unit-2, unit-2);
+        }
+      }
+
+      scoreEl.textContent = score;
+      linesEl.textContent = lines;
+      levelEl.textContent = level;
+    }
+
+    // Controls
+    window.addEventListener('keydown', e=>{
+      if(!running) return;
+      const k = e.key;
+      if(k==='ArrowLeft') { current.x--; if(collide(board,current)) current.x++; }
+      if(k==='ArrowRight') { current.x++; if(collide(board,current)) current.x--; }
+      if(k==='ArrowUp') { const old = current.shape; current.shape = rotate(current.shape); if(collide(board,current)) current.shape = old; }
+      if(k==='ArrowDown') { current.y++; if(collide(board,{...current,y:current.y})) { current.y--; lockPiece(); } }
+      if(k===' ') { e.preventDefault(); hardDrop(); }
+    });
+
+    // Start / pause
+    document.getElementById('start').addEventListener('click', ()=>{ resetGame(); startGame(); });
+    document.getElementById('pause').addEventListener('click', ()=>{ running = !running; document.getElementById('pause').textContent = running ? 'Pauza' : 'Wznów'; });
+    goRestart.addEventListener('click', ()=>{ gameover.style.display='none'; resetGame(); startGame(); });
+
+    function resetGame(){
+      board = createEmptyBoard();
+      current = null; next = null; score = 0; lines = 0; level = 1; dropInterval = 1000; pendingLinesToClear = 0;
+      scoreEl.textContent = score; linesEl.textContent = lines; levelEl.textContent = level;
+      gameover.style.display = 'none'; modal.style.display='none';
+    }
+
+    function startGame(){
+      resetGame(); next = randPiece(); spawn(); running = true; lastTime = performance.now(); requestAnimationFrame(loop);
+    }
+
+    function loop(time){
+      if(!running){ lastTime = time; draw(); requestAnimationFrame(loop); return; }
+      const delta = time - lastTime;
+      lastTime = time;
+      dropCounter += delta;
+      if(dropCounter > dropInterval){
+        dropCounter = 0;
+        current.y++;
+        if(collide(board,current)) { current.y--; lockPiece(); }
+      }
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    // Initialize
+    draw();
+    // auto-start minimal demo disabled; user clicks Nowa gra
+  </script>
+</body>
+</html>
